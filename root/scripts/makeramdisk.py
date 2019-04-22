@@ -377,7 +377,7 @@ class ramdiskmod():
         return
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,description='Makeramdisk '+version+' (c) B. Kerler 2018, Email: bjoern@kerler.re')
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,description='Makeramdisk '+version+' (c) B. Kerler 2018')
 
     parser.add_argument(
         '-filename', '-fn',
@@ -407,7 +407,7 @@ def main():
     custom=args.custom
     precustom=args.precustom
 
-    print("\nMakeramdisk Android "+version+" (c) B. Kerler 2018, Email: bjoern@kerler.re")
+    print("\nMakeramdisk Android "+version+" (c) B. Kerler 2018")
     print("------------------------------------------------------------\n")
     
     BOOTPATH,BOOTIMAGE=path,filename=os.path.split(args.filename)
