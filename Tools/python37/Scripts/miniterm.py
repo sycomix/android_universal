@@ -229,7 +229,7 @@ class NoTerminal(Transform):
 class NoControls(NoTerminal):
     """Remove all control codes, incl. CR+LF"""
 
-    REPLACEMENT_MAP = dict((x, 0x2400 + x) for x in range(32))
+    REPLACEMENT_MAP = {x: 0x2400 + x for x in range(32)}
     REPLACEMENT_MAP.update(
         {
             0x20: 0x2423,  # visual space
@@ -275,12 +275,12 @@ class DebugIO(Transform):
     """Print what is sent and received"""
 
     def rx(self, text):
-        sys.stderr.write(' [RX:{}] '.format(repr(text)))
+        sys.stderr.write(f' [RX:{repr(text)}] ')
         sys.stderr.flush()
         return text
 
     def tx(self, text):
-        sys.stderr.write(' [TX:{}] '.format(repr(text)))
+        sys.stderr.write(f' [TX:{repr(text)}] ')
         sys.stderr.flush()
         return text
 
@@ -430,20 +430,22 @@ class Miniterm(object):
             # on RFC 2217 ports, it can happen if no modem state notification was
             # yet received. ignore this error.
             pass
-        sys.stderr.write('--- software flow control: {}\n'.format('active' if self.serial.xonxoff else 'inactive'))
-        sys.stderr.write('--- hardware flow control: {}\n'.format('active' if self.serial.rtscts else 'inactive'))
-        sys.stderr.write('--- serial input encoding: {}\n'.format(self.input_encoding))
-        sys.stderr.write('--- serial output encoding: {}\n'.format(self.output_encoding))
-        sys.stderr.write('--- EOL: {}\n'.format(self.eol.upper()))
-        sys.stderr.write('--- filters: {}\n'.format(' '.join(self.filters)))
+        sys.stderr.write(
+            f"--- software flow control: {'active' if self.serial.xonxoff else 'inactive'}\n"
+        )
+        sys.stderr.write(
+            f"--- hardware flow control: {'active' if self.serial.rtscts else 'inactive'}\n"
+        )
+        sys.stderr.write(f'--- serial input encoding: {self.input_encoding}\n')
+        sys.stderr.write(f'--- serial output encoding: {self.output_encoding}\n')
+        sys.stderr.write(f'--- EOL: {self.eol.upper()}\n')
+        sys.stderr.write(f"--- filters: {' '.join(self.filters)}\n")
 
     def reader(self):
         """loop and copy serial->console"""
         try:
             while self.alive and self._reader_alive:
-                # read all that is there or wait for one byte
-                data = self.serial.read(self.serial.in_waiting or 1)
-                if data:
+                if data := self.serial.read(self.serial.in_waiting or 1):
                     if self.raw:
                         self.console.write_bytes(data)
                     else:
@@ -496,7 +498,7 @@ class Miniterm(object):
 
     def handle_menu_key(self, c):
         """Implement a simple menu / settings"""
-        if c == self.menu_character or c == self.exit_character:
+        if c in [self.menu_character, self.exit_character]:
             # Menu/exit character again -> send itself
             self.serial.write(self.tx_encoder.encode(c))
             if self.echo:
@@ -505,34 +507,40 @@ class Miniterm(object):
             self.upload_file()
         elif c in '\x08hH?':                    # CTRL+H, h, H, ? -> Show help
             sys.stderr.write(self.get_help_text())
-        elif c == '\x12':                       # CTRL+R -> Toggle RTS
+        elif c == '\x12':                   # CTRL+R -> Toggle RTS
             self.serial.rts = not self.serial.rts
-            sys.stderr.write('--- RTS {} ---\n'.format('active' if self.serial.rts else 'inactive'))
-        elif c == '\x04':                       # CTRL+D -> Toggle DTR
+            sys.stderr.write(
+                f"--- RTS {'active' if self.serial.rts else 'inactive'} ---\n"
+            )
+        elif c == '\x04':                   # CTRL+D -> Toggle DTR
             self.serial.dtr = not self.serial.dtr
-            sys.stderr.write('--- DTR {} ---\n'.format('active' if self.serial.dtr else 'inactive'))
-        elif c == '\x02':                       # CTRL+B -> toggle BREAK condition
+            sys.stderr.write(
+                f"--- DTR {'active' if self.serial.dtr else 'inactive'} ---\n"
+            )
+        elif c == '\x02':                   # CTRL+B -> toggle BREAK condition
             self.serial.break_condition = not self.serial.break_condition
-            sys.stderr.write('--- BREAK {} ---\n'.format('active' if self.serial.break_condition else 'inactive'))
-        elif c == '\x05':                       # CTRL+E -> toggle local echo
+            sys.stderr.write(
+                f"--- BREAK {'active' if self.serial.break_condition else 'inactive'} ---\n"
+            )
+        elif c == '\x05':                   # CTRL+E -> toggle local echo
             self.echo = not self.echo
-            sys.stderr.write('--- local echo {} ---\n'.format('active' if self.echo else 'inactive'))
+            sys.stderr.write(
+                f"--- local echo {'active' if self.echo else 'inactive'} ---\n"
+            )
         elif c == '\x06':                       # CTRL+F -> edit filters
             self.change_filter()
-        elif c == '\x0c':                       # CTRL+L -> EOL mode
+        elif c == '\x0c':                   # CTRL+L -> EOL mode
             modes = list(EOL_TRANSFORMATIONS)  # keys
             eol = modes.index(self.eol) + 1
             if eol >= len(modes):
                 eol = 0
             self.eol = modes[eol]
-            sys.stderr.write('--- EOL: {} ---\n'.format(self.eol.upper()))
+            sys.stderr.write(f'--- EOL: {self.eol.upper()} ---\n')
             self.update_transformations()
         elif c == '\x01':                       # CTRL+A -> set encoding
             self.change_encoding()
         elif c == '\x09':                       # CTRL+I -> info
             self.dump_port_settings()
-        #~ elif c == '\x01':                       # CTRL+A -> cycle escape mode
-        #~ elif c == '\x0c':                       # CTRL+L -> cycle linefeed mode
         elif c in 'pP':                         # P -> change port
             self.change_port()
         elif c in 'sS':                         # S -> suspend / open port temporarily
@@ -554,9 +562,6 @@ class Miniterm(object):
         elif c in 'mM':                         # M -> change to mark parity
             self.serial.parity = serial.PARITY_MARK
             self.dump_port_settings()
-        elif c in 'sS':                         # S -> change to space parity
-            self.serial.parity = serial.PARITY_SPACE
-            self.dump_port_settings()
         elif c in 'nN':                         # N -> change to no parity
             self.serial.parity = serial.PARITY_NONE
             self.dump_port_settings()
@@ -576,18 +581,17 @@ class Miniterm(object):
             self.serial.rtscts = (c == 'R')
             self.dump_port_settings()
         else:
-            sys.stderr.write('--- unknown menu character {} --\n'.format(key_description(c)))
+            sys.stderr.write(f'--- unknown menu character {key_description(c)} --\n')
 
     def upload_file(self):
         """Ask user for filenname and send its contents"""
         sys.stderr.write('\n--- File to upload: ')
         sys.stderr.flush()
         with self.console:
-            filename = sys.stdin.readline().rstrip('\r\n')
-            if filename:
+            if filename := sys.stdin.readline().rstrip('\r\n'):
                 try:
                     with open(filename, 'rb') as f:
-                        sys.stderr.write('--- Sending file {} ---\n'.format(filename))
+                        sys.stderr.write(f'--- Sending file {filename} ---\n')
                         while True:
                             block = f.read(1024)
                             if not block:
@@ -596,9 +600,9 @@ class Miniterm(object):
                             # Wait for output buffer to drain.
                             self.serial.flush()
                             sys.stderr.write('.')   # Progress indicator.
-                    sys.stderr.write('\n--- File {} sent ---\n'.format(filename))
+                    sys.stderr.write(f'\n--- File {filename} sent ---\n')
                 except IOError as e:
-                    sys.stderr.write('--- ERROR opening file {}: {} ---\n'.format(filename, e))
+                    sys.stderr.write(f'--- ERROR opening file {filename}: {e} ---\n')
 
     def change_filter(self):
         """change the i/o transformations"""
@@ -606,34 +610,36 @@ class Miniterm(object):
         sys.stderr.write('\n'.join(
             '---   {:<10} = {.__doc__}'.format(k, v)
             for k, v in sorted(TRANSFORMATIONS.items())))
-        sys.stderr.write('\n--- Enter new filter name(s) [{}]: '.format(' '.join(self.filters)))
+        sys.stderr.write(
+            f"\n--- Enter new filter name(s) [{' '.join(self.filters)}]: "
+        )
         with self.console:
             new_filters = sys.stdin.readline().lower().split()
         if new_filters:
             for f in new_filters:
                 if f not in TRANSFORMATIONS:
-                    sys.stderr.write('--- unknown filter: {}\n'.format(repr(f)))
+                    sys.stderr.write(f'--- unknown filter: {repr(f)}\n')
                     break
             else:
                 self.filters = new_filters
                 self.update_transformations()
-        sys.stderr.write('--- filters: {}\n'.format(' '.join(self.filters)))
+        sys.stderr.write(f"--- filters: {' '.join(self.filters)}\n")
 
     def change_encoding(self):
         """change encoding on the serial port"""
-        sys.stderr.write('\n--- Enter new encoding name [{}]: '.format(self.input_encoding))
+        sys.stderr.write(f'\n--- Enter new encoding name [{self.input_encoding}]: ')
         with self.console:
             new_encoding = sys.stdin.readline().strip()
         if new_encoding:
             try:
                 codecs.lookup(new_encoding)
             except LookupError:
-                sys.stderr.write('--- invalid encoding name: {}\n'.format(new_encoding))
+                sys.stderr.write(f'--- invalid encoding name: {new_encoding}\n')
             else:
                 self.set_rx_encoding(new_encoding)
                 self.set_tx_encoding(new_encoding)
-        sys.stderr.write('--- serial input encoding: {}\n'.format(self.input_encoding))
-        sys.stderr.write('--- serial output encoding: {}\n'.format(self.output_encoding))
+        sys.stderr.write(f'--- serial input encoding: {self.input_encoding}\n')
+        sys.stderr.write(f'--- serial output encoding: {self.output_encoding}\n')
 
     def change_baudrate(self):
         """change the baudrate"""
@@ -644,7 +650,7 @@ class Miniterm(object):
             try:
                 self.serial.baudrate = int(sys.stdin.readline().strip())
             except ValueError as e:
-                sys.stderr.write('--- ERROR setting baudrate: {} ---\n'.format(e))
+                sys.stderr.write(f'--- ERROR setting baudrate: {e} ---\n')
                 self.serial.baudrate = backup
             else:
                 self.dump_port_settings()
@@ -670,12 +676,12 @@ class Miniterm(object):
                 new_serial.open()
                 new_serial.break_condition = self.serial.break_condition
             except Exception as e:
-                sys.stderr.write('--- ERROR opening new port: {} ---\n'.format(e))
+                sys.stderr.write(f'--- ERROR opening new port: {e} ---\n')
                 new_serial.close()
             else:
                 self.serial.close()
                 self.serial = new_serial
-                sys.stderr.write('--- Port changed to: {} ---\n'.format(self.serial.port))
+                sys.stderr.write(f'--- Port changed to: {self.serial.port} ---\n')
             # and restart the reader thread
             self._start_reader()
 
@@ -687,7 +693,7 @@ class Miniterm(object):
         # reader thread needs to be shut down
         self._stop_reader()
         self.serial.close()
-        sys.stderr.write('\n--- Port closed: {} ---\n'.format(self.serial.port))
+        sys.stderr.write(f'\n--- Port closed: {self.serial.port} ---\n')
         do_change_port = False
         while not self.serial.is_open:
             sys.stderr.write('--- Quit: {exit} | p: port change | any other key to reconnect ---\n'.format(
@@ -702,13 +708,13 @@ class Miniterm(object):
             try:
                 self.serial.open()
             except Exception as e:
-                sys.stderr.write('--- ERROR opening port: {} ---\n'.format(e))
+                sys.stderr.write(f'--- ERROR opening port: {e} ---\n')
         if do_change_port:
             self.change_port()
         else:
             # and restart the reader thread
             self._start_reader()
-            sys.stderr.write('--- Port opened: {} ---\n'.format(self.serial.port))
+            sys.stderr.write(f'--- Port opened: {self.serial.port} ---\n')
 
     def get_help_text(self):
         """return the help text"""
@@ -922,16 +928,16 @@ def main(default_port=None, default_baudrate=9600, default_rts=None, default_dtr
 
             if args.dtr is not None:
                 if not args.quiet:
-                    sys.stderr.write('--- forcing DTR {}\n'.format('active' if args.dtr else 'inactive'))
+                    sys.stderr.write(f"--- forcing DTR {'active' if args.dtr else 'inactive'}\n")
                 serial_instance.dtr = args.dtr
             if args.rts is not None:
                 if not args.quiet:
-                    sys.stderr.write('--- forcing RTS {}\n'.format('active' if args.rts else 'inactive'))
+                    sys.stderr.write(f"--- forcing RTS {'active' if args.rts else 'inactive'}\n")
                 serial_instance.rts = args.rts
 
             serial_instance.open()
         except serial.SerialException as e:
-            sys.stderr.write('could not open port {}: {}\n'.format(repr(args.port), e))
+            sys.stderr.write(f'could not open port {repr(args.port)}: {e}\n')
             if args.develop:
                 raise
             if not args.ask:

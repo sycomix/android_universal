@@ -96,9 +96,8 @@ class ramdiskmod():
         self.BIT=int(bit)
 
     def compress(self,to_compress):
-        f = open("__tmp_uncompressed__", "wb")
-        f.write(to_compress)
-        f.close()
+        with open("__tmp_uncompressed__", "wb") as f:
+            f.write(to_compress)
         if platform.system() == "Windows":
             cmd = "root\\init-bootstrap\\quicklz.exe"
         else:
@@ -107,9 +106,8 @@ class ramdiskmod():
             raise IOError("quicklz binary not found. Please compile it first.")
         cmd = "\"" + cmd + "\"" + " comp __tmp_uncompressed__ __tmp_compressed__"
         os.system(cmd)
-        f = open("__tmp_compressed__", "rb")
-        data = f.read()
-        f.close()
+        with open("__tmp_compressed__", "rb") as f:
+            data = f.read()
         os.remove("__tmp_uncompressed__")
         os.remove("__tmp_compressed__")
         return data
@@ -139,8 +137,15 @@ class ramdiskmod():
         return output
 
     def unpack_kernel(self,path):
-        print("Unpacking kernel : %s to %s" % (self.BOOTIMAGE,path))
-        info=self.run(self.BOOTIMG +" unpackimg -i " + self.BOOTIMAGE + " -k " + os.path.join(path, "kernel") + " -r " + os.path.join(path, "rd.gz") + " -d " + os.path.join(path, "dtb"))
+        print(f"Unpacking kernel : {self.BOOTIMAGE} to {path}")
+        info = self.run(
+            f"{self.BOOTIMG} unpackimg -i {self.BOOTIMAGE} -k "
+            + os.path.join(path, "kernel")
+            + " -r "
+            + os.path.join(path, "rd.gz")
+            + " -d "
+            + os.path.join(path, "dtb")
+        )
         lines=str(info,'utf-8').split("\r\n")
         details={}
         for line in lines:
@@ -151,7 +156,14 @@ class ramdiskmod():
         return details
 
     def unpack_recovery(self,path):
-        info=self.run(self.BOOTIMG +" unpackimg -i " + self.RECOVERYIMG + " -k " + os.path.join(path, "rkernel") + " -r " + os.path.join(path, "rrd.gz") + " -d " + os.path.join(path, "rdtb"))
+        info = self.run(
+            f"{self.BOOTIMG} unpackimg -i {self.RECOVERYIMG} -k "
+            + os.path.join(path, "rkernel")
+            + " -r "
+            + os.path.join(path, "rrd.gz")
+            + " -d "
+            + os.path.join(path, "rdtb")
+        )
 
     def rmrf(self,path):
         if os.path.exists(path):
@@ -167,12 +179,18 @@ class ramdiskmod():
         return file_content
 
     def unpack_initfs(self,filename,path):
-        print ("- Unpacking initramfs to %s" % path)
+        print(f"- Unpacking initramfs to {path}")
         if os.path.exists(path):
             self.rmrf(path)
         os.mkdir(path)
         rdcpio=self.guz(os.path.join(self.RPATH,filename))
-        p = subprocess.Popen(self.BOOTIMG+" unpackinitfs -d "+path,stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(
+            f"{self.BOOTIMG} unpackinitfs -d {path}",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
         p.stdin.write(rdcpio)
         sleep(0.1)
         while True:
@@ -186,9 +204,9 @@ class ramdiskmod():
     def fix_mtp(self):
         for file in os.listdir(self.RAMDISK):
             if (len(file.split("."))>3) and "init" in file and ".usb.rc" in file:
-                with open(self.RAMDISK + "/" + file, 'rb') as rf:
+                with open(f"{self.RAMDISK}/{file}", 'rb') as rf:
                     data = rf.readlines()
-                with open(self.RAMDISK + "/" + file, 'wb') as wf:
+                with open(f"{self.RAMDISK}/{file}", 'wb') as wf:
                     flag = 0
                     i = 0
                     while (i < len(data)):
@@ -196,7 +214,10 @@ class ramdiskmod():
                         if b"on property:sys.usb.config=mtp\n" in line or b"on property:sys.usb.config=mtp " in line:
                             wf.write(b'on property:sys.usb.config=mtp\n')
                             wf.write(b'    start adbd\n\n')
-                            while (not b"setprop sys.usb.state ${sys.usb.config}" in line):
+                            while (
+                                b"setprop sys.usb.state ${sys.usb.config}"
+                                not in line
+                            ):
                                 line = data[i]
                                 if b"functions" in line:
                                     idx = line.rfind(b"functions ")
@@ -208,7 +229,10 @@ class ramdiskmod():
                         if b"on property:sys.usb.config=charging\n" in line or b"on property:sys.usb.config=charging " in line:
                             wf.write(b'on property:sys.usb.config=charging\n')
                             wf.write(b'    start adbd\n\n')
-                            while (not b"setprop sys.usb.state ${sys.usb.config}" in line):
+                            while (
+                                b"setprop sys.usb.state ${sys.usb.config}"
+                                not in line
+                            ):
                                 line = data[i]
                                 if b"functions" in line:
                                     idx = line.rfind(b"functions ")
@@ -221,8 +245,16 @@ class ramdiskmod():
                         i += 1
 
     def repack_stuff(self,details):
-        self.run(self.BOOTIMG + " mkinitfs " + self.RAMDISK + " | " + self.BB + " gzip -c > "+os.path.join(self.RPATH,self.TARGET+".cpio.gz"))
-        cmd=self.BOOTIMG+" mkimg --kernel "+os.path.join(self.RPATH,"kernel")+" --ramdisk "+os.path.join(self.RPATH,self.TARGET+".cpio.gz")+" "
+        self.run(
+            f'{self.BOOTIMG} mkinitfs {self.RAMDISK} | {self.BB} gzip -c > {os.path.join(self.RPATH, f"{self.TARGET}.cpio.gz")}'
+        )
+        cmd = (
+            f"{self.BOOTIMG} mkimg --kernel "
+            + os.path.join(self.RPATH, "kernel")
+            + " --ramdisk "
+            + os.path.join(self.RPATH, f"{self.TARGET}.cpio.gz")
+            + " "
+        )
         cmd += "--base 0x0 "
         if "BOARD_KERNEL_BOARD" in details:
             cmd+="--board \""+details["BOARD_KERNEL_BOARD"]+"\" "
@@ -238,7 +270,7 @@ class ramdiskmod():
             cmd+="--cmdline \""+details["BOARD_KERNEL_CMDLINE"]+"\" "
         if os.path.exists(os.path.join(self.RPATH,"dtb")):
             cmd+="--dt "+os.path.join(self.RPATH,"dtb")+" "
-        cmd+="-o "+self.TARGET
+        cmd += f"-o {self.TARGET}"
         self.run(cmd)
 
     def bbr(self,input):
@@ -246,59 +278,108 @@ class ramdiskmod():
 
     def patch_stuff(self):
         if (self.precustom==True):
-            input("- Make your changes before patches in the ramdisk (%s Folder). Press Enter to continue." % self.RAMDISK)
+            input(
+                f"- Make your changes before patches in the ramdisk ({self.RAMDISK} Folder). Press Enter to continue."
+            )
         print("- Doing our stuff")
         print("- Copying needed binaries")
-        shutil.copyfile("root/rootshell/init.shell.rc",self.RAMDISK+"/init.shell.rc@0750")
-        shutil.copyfile("root/rootshell/rootshell.sh", self.RAMDISK + "/sbin/rootshell.sh@0755")
-        shutil.copyfile("root/rootshell/root_hack.sh", self.RAMDISK + "/sbin/root_hack.sh@0755")
+        shutil.copyfile(
+            "root/rootshell/init.shell.rc", f"{self.RAMDISK}/init.shell.rc@0750"
+        )
+        shutil.copyfile(
+            "root/rootshell/rootshell.sh", f"{self.RAMDISK}/sbin/rootshell.sh@0755"
+        )
+        shutil.copyfile(
+            "root/rootshell/root_hack.sh", f"{self.RAMDISK}/sbin/root_hack.sh@0755"
+        )
         #shutil.copyfile("root/rootshell/rw", self.RAMDISK + "/sbin/rw@0755")
-        shutil.copyfile("root/other/bruteforce", self.RAMDISK + "/sbin/bruteforce@0755")
-        shutil.copyfile("root/.android/adb_keys",self.RAMDISK+"/adb_keys")
+        shutil.copyfile(
+            "root/other/bruteforce", f"{self.RAMDISK}/sbin/bruteforce@0755"
+        )
+        shutil.copyfile("root/.android/adb_keys", f"{self.RAMDISK}/adb_keys")
         print("- Patching sepolicy")
-        if not os.path.exists(self.RAMDISK+"/sepolicy@0644"):
+        if not os.path.exists(f"{self.RAMDISK}/sepolicy@0644"):
             print("- Unpacking recovery, missing sepolicy file in boot !")
             self.unpack_recovery(self.RPATH)
             self.rmrf(self.RRAMDISK)
             os.mkdir(self.RRAMDISK)
             self.unpack_initfs("rrd.gz",self.RRAMDISK)
-            shutil.copyfile(self.RRAMDISK+"/sepolicy@0644",self.RAMDISK+"/sepolicy@0644")
-            if not os.path.exists(self.RAMDISK + "/sepolicy_version@0644"):
-                shutil.copyfile(self.RRAMDISK + "/sepolicy_version@0644", self.RAMDISK + "/sepolicy_version@0644")
+            shutil.copyfile(
+                f"{self.RRAMDISK}/sepolicy@0644", f"{self.RAMDISK}/sepolicy@0644"
+            )
+            if not os.path.exists(f"{self.RAMDISK}/sepolicy_version@0644"):
+                shutil.copyfile(
+                    f"{self.RRAMDISK}/sepolicy_version@0644",
+                    f"{self.RAMDISK}/sepolicy_version@0644",
+                )
             self.rmrf(self.RRAMDISK)
-            os.remove(self.RPATH + "/rkernel")
-            os.remove(self.RPATH + "/rrd.gz")
-            os.remove(self.RPATH + "/rdtb")
+            os.remove(f"{self.RPATH}/rkernel")
+            os.remove(f"{self.RPATH}/rrd.gz")
+            os.remove(f"{self.RPATH}/rdtb")
         #$BOOTIMG magiskpolicy --load $RAMDISK/sepolicy@0644 --save $RAMDISK/sepolicy@0644 --minimal
-        self.run(self.BOOTIMG+" magiskpolicy --load "+os.path.join(self.RAMDISK,"sepolicy@0644")+" --save "+os.path.join(self.RAMDISK,"sepolicy@0644")+" --magisk")
+        self.run(
+            f"{self.BOOTIMG} magiskpolicy --load "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --save "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --magisk"
+        )
         #$BOOTIMG magiskpolicy --load $RAMDISK/sepolicy@0644 --save $RAMDISK/sepolicy@0644 "allow su vendor_toolbox_exec file { execute_no_trans }"
         #$BOOTIMG magiskpolicy --load $RAMDISK/sepolicy@0644 --save $RAMDISK/sepolicy@0644 "allow su shell_data_file dir { search }"
         #$BOOTIMG magiskpolicy --load $RAMDISK/sepolicy@0644 --save $RAMDISK/sepolicy@0644 "allow su { port node } tcp_socket *"
-        self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.path.join(self.RAMDISK,"sepolicy@0644")+" \"allow su * process { * }\"")
-        self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.path.join(self.RAMDISK,"sepolicy@0644")+" \"allow * su process { * }\"")
-        self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.path.join(self.RAMDISK,"sepolicy@0644")+" \"allow su vold * { * }\"")
-        self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.path.join(self.RAMDISK,"sepolicy@0644")+" \"allow vold su * { * }\"")
+        self.run(
+            f"{self.BOOTIMG} magiskpolicy --load "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --save "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " \"allow su * process { * }\""
+        )
+        self.run(
+            f"{self.BOOTIMG} magiskpolicy --load "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --save "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " \"allow * su process { * }\""
+        )
+        self.run(
+            f"{self.BOOTIMG} magiskpolicy --load "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --save "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " \"allow su vold * { * }\""
+        )
+        self.run(
+            f"{self.BOOTIMG} magiskpolicy --load "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " --save "
+            + os.path.join(self.RAMDISK, "sepolicy@0644")
+            + " \"allow vold su * { * }\""
+        )
         #self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.#path.join(self.RAMDISK,"sepolicy@0644")+" \"allow su * process { * }\"")
         #self.run(self.BOOTIMG + " magiskpolicy --load " + os.path.join(self.RAMDISK,"sepolicy@0644")+" --save " + os.#path.join(self.RAMDISK,"sepolicy@0644")+" \"allow * su process { * }\"")
-        
+
         print("- Injecting rootshell")
         self.bbr("sed -i \"/on early-init/iimport /init.shell.rc\\n\" "+os.path.join(self.RAMDISK,"init.rc@0750"))
         self.bbr("sed -i \"/trigger fs/atrigger rootshell_trigger\\n\" "+os.path.join(self.RAMDISK,"init.rc@0750"))
 
         print("- Injecting adb")
         ff=""
-        if os.path.exists(self.RAMDISK+"/prop.default@0644"):
+        if os.path.exists(f"{self.RAMDISK}/prop.default@0644"):
             ff=os.path.join(self.RAMDISK,"prop.default@0644")
-        elif os.path.exists(self.RAMDISK + "/default.prop@0600"):
+        elif os.path.exists(f"{self.RAMDISK}/default.prop@0600"):
             ff = os.path.join(self.RAMDISK,"default.prop@0600")
-        elif os.path.exists(self.RAMDISK + "/default.prop@0644"):
+        elif os.path.exists(f"{self.RAMDISK}/default.prop@0644"):
             ff = os.path.join(self.RAMDISK,"default.prop@0644")
         if ff!="":
             self.bbr("sed -i -e \"s/persist.sys.usb.config=.*/persist.sys.usb.config=adb/g\" "+ff)
         print("- Injecting sepolicy_version")
         self.bbr("sed -i -e \"1 s/....$/9999/\" "+self.RAMDISK+"/sepolicy_version@0644")
         print("- Patching init")
-        self.run(self.BOOTIMG+" hexpatch "+os.path.join(self.RAMDISK,"init@0750")+" 2F76656E646F722F6574632F73656C696E75782F707265636F6D70696C65645F7365706F6C69637900 2F7365706F6C6963790000000000000000000000000000000000000000000000000000000000000000")
+        self.run(
+            f"{self.BOOTIMG} hexpatch "
+            + os.path.join(self.RAMDISK, "init@0750")
+            + " 2F76656E646F722F6574632F73656C696E75782F707265636F6D70696C65645F7365706F6C69637900 2F7365706F6C6963790000000000000000000000000000000000000000000000000000000000000000"
+        )
         self.fix_mtp()
 
         #if (self.MODE==1):
@@ -310,12 +391,14 @@ class ramdiskmod():
         #    self.run(self.BB+"sed -i '/on early-init/iimport /init.magisk.rc\n' "+self.RAMDISK+"/init.rc@0750")
 
         if (self.custom==True):
-            input("- Make your changes after patches in the ramdisk (%s Folder). Press Enter to continue." % self.RAMDISK)
+            input(
+                f"- Make your changes after patches in the ramdisk ({self.RAMDISK} Folder). Press Enter to continue."
+            )
 
     def sign(self,target):
         print("Signing ....")
-        if os.path.exists(target+".signed"):
-           os.remove(target+".signed")
+        if os.path.exists(f"{target}.signed"):
+            os.remove(f"{target}.signed")
         self.run("java -jar "+os.path.join("root","keys","BootSignature.jar")+" /boot "+target+" "+os.path.join("root","keys","verity.pk8")+" "+os.path.join("root","keys","verity.x509.pem")+" "+target+".signed")
         self.run("java -jar "+os.path.join("root","keys","BootSignature.jar")+" -verify "+target+".signed")
 
@@ -336,30 +419,30 @@ class ramdiskmod():
                     qcdtsize = int((param.qcdt_size + param.page_size - 1) / param.page_size) * param.page_size
                     length = param.page_size + kernelsize + ramdisksize + secondsize + qcdtsize
                     fake = data[length:]
-                    fake = fake[0:(int(fake[2]) << 8) + int(fake[3])+4]
+                    fake = fake[:(int(fake[2]) << 8) + int(fake[3])+4]
                 except:
                     fake = None
         except:
-            print("Couldn't find " + org + ", aborting.")
+            print(f"Couldn't find {org}, aborting.")
             exit(1)
 
         target=target[:target.rfind(".")]
         if fake != None:
-            if os.path.exists(target + ".patched.signed"):
-                if os.path.exists(target+".signed"):
-                    os.remove(target+".signed")
-                os.rename(target + ".patched.signed", target + ".signed")
-                param = getheader(target + ".signed")
+            if os.path.exists(f"{target}.patched.signed"):
+                if os.path.exists(f"{target}.signed"):
+                    os.remove(f"{target}.signed")
+                os.rename(f"{target}.patched.signed", f"{target}.signed")
+                param = getheader(f"{target}.signed")
                 kernelsize = int((param.kernel_size + param.page_size - 1) / param.page_size) * param.page_size
                 ramdisksize = int((param.ramdisk_size + param.page_size - 1) / param.page_size) * param.page_size
                 secondsize = int((param.second_size + param.page_size - 1) / param.page_size) * param.page_size
                 qcdtsize = int((param.qcdt_size + param.page_size - 1) / param.page_size) * param.page_size
                 length = param.page_size + kernelsize + ramdisksize + secondsize + qcdtsize
                 print("- Creating rot fake with length 0x%08X" % length)
-                with open(target + ".signed", "rb") as rf:
+                with open(f"{target}.signed", "rb") as rf:
                     rdata = rf.read()
                     rdata = rdata[:length]
-                    with open(target + ".rotfake", "wb") as wb:
+                    with open(f"{target}.rotfake", "wb") as wb:
                         wb.write(rdata)
                         wb.write(fake)
 
@@ -377,7 +460,10 @@ class ramdiskmod():
         return
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,description='Makeramdisk '+version+' (c) B. Kerler 2018')
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=f'Makeramdisk {version} (c) B. Kerler 2018',
+    )
 
     parser.add_argument(
         '-filename', '-fn',
@@ -389,7 +475,7 @@ def main():
         help='Just extract kernel + ramdisk',
         action="store_true",
         default=False)
-        
+
     parser.add_argument(
         '-custom', '-c',
         help='Stop in order to make changes',
@@ -409,7 +495,7 @@ def main():
 
     print("\nMakeramdisk Android "+version+" (c) B. Kerler 2018")
     print("------------------------------------------------------------\n")
-    
+
     BOOTPATH,BOOTIMAGE=path,filename=os.path.split(args.filename)
     TMPPATH=os.path.join(BOOTPATH,"tmp")
     if (os.path.exists(TMPPATH)):
@@ -425,9 +511,9 @@ def main():
         #print(BOOTIMAGE)
         #print(TMPPATH)
         exit(1)
-    
+
     #scriptpath=os.path.join("root","scripts","patchit.sh")
-    
+
     busybox=os.path.join("root","scripts","busybox")+" ash "
     Linux=False
     if platform.system()=="Windows":
@@ -449,8 +535,8 @@ def main():
     filename=""
     if os.path.exists(args.filename):
         BOOTPATH,BOOTIMAGE=os.path.split(args.filename)
-    
-    rdm = ramdiskmod(BOOTPATH,BOOTIMAGE,int(bit),custom,precustom)
+
+    rdm = ramdiskmod(BOOTPATH, BOOTIMAGE, bit, custom, precustom)
     if args.justunpack==True:
         rdm.RPATH=os.path.join(BOOTPATH,rdm.RPATH)
         rdm.RAMDISK=os.path.join(BOOTPATH,rdm.RAMDISK)

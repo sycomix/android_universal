@@ -17,16 +17,16 @@ def extract_hash(pub_key,data):
     encrypted = transform.bytes2int(data)
     decrypted = transform.int2bytes(core.decrypt_int(encrypted, pub_key.e, pub_key.n),keylen)
     hash = decrypted[-hashlen:]
-    if (decrypted[0:2] != b'\x00\x01') or (len(hash) != hashlen):
+    if decrypted[:2] != b'\x00\x01' or len(hash) != hashlen:
         raise Exception('Signature error')
     return hash
 
 def dump_signature(data):
     #print (binascii.hexlify(data[0:10]))
-    if data[0:2] == b'\x30\x82':
+    if data[:2] == b'\x30\x82':
         slen = struct.unpack('>H', data[2:4])[0]
         total = slen + 4
-        cert = struct.unpack('<%ds' % total, data[0:total])[0]
+        cert = struct.unpack('<%ds' % total, data[:total])[0]
 
         der = DerSequence()
         der.decode(cert)
